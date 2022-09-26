@@ -24,6 +24,18 @@
             <td><div class="message" id="message" v-html="message"></div></td>
         </tr>
         <tr>
+            <td><div class="message">PING</div></td>
+            <td><div class="message">{{ping_counters}}</div></td>
+        </tr>
+        <tr>
+            <td><div class="message">SUM Timer</div></td>
+            <td><div class="message">{{latency_sum}}</div></td>
+        </tr>
+        <tr>
+            <td><div class="message">Calc Ping</div></td>
+            <td><div class="message">{{latencyR}}</div></td>
+        </tr>
+        <tr>
             <td class="display-box standby" id="standby"><h2>Standby</h2></td>
             <td class="display-box hidden" id="go"><h2>Go</h2></td>
         </tr>
@@ -46,6 +58,7 @@
     data () {
       return {
         ping_counters: 0,
+        latency_sum: 0,
         peer: new Peer(null, {
           debug: 2,
           pingInterval: 1,
@@ -79,6 +92,11 @@
       console.log("mounted Peer Receive");
       this.initialize()
     },
+    computed: {
+      latencyR() {
+        return ((this.latency_sum / this.ping_counters) / this.ping_counters) || -1;
+      },
+    },
     methods: {
       initialize(){
         let self = this;
@@ -111,6 +129,8 @@
         });
         self.peer.on('disconnected', function () {
             self.status = "Connection lost. Please reconnect";
+            self.ping_counters = 0;
+            self.latency_sum = 0;
             console.log('Connection lost. Please reconnect');
             // Workaround for self.peer.reconnect deleting previous id
             self.peer.id = self.lastPeerId;
@@ -119,6 +139,8 @@
         });
         self.peer.on('close', function() {
             self.conn = null;
+            self.ping_counters = 0;
+            self.latency_sum = 0;
             self.status = "Connection destroyed. Please refresh";
             console.log('Connection destroyed');
         });
@@ -140,15 +162,19 @@
       },
 
       pingHeroku() {
-        var TS = window.performance.timing.navigationStart + window.performance.now();
-        this.ping_counters++;
-        this.conn.send({
-          type: 'ping',
-          data: this.ping_counters,
-          date: TS
-        });
-        this.addMessage("<span class=\"selfMsg\">Self: </span>" + 'ping:'+this.ping_counters);
-        // this.timeoutID = setTimeout(this.pingHeroku, 2000);
+        if (this.conn && this.conn.open) {
+          var TS = window.performance.timing.navigationStart + window.performance.now();
+          this.ping_counters++;
+          this.conn.send({
+            type: 'ping',
+            data: this.ping_counters,
+            date_s: TS
+          });
+          this.addMessage("<span class=\"selfMsg\">Self: </span>" + 'ping:'+this.ping_counters);
+          // this.timeoutID = setTimeout(this.pingHeroku, 2000);
+        } else {
+          console.log('Connection is closed');
+        }
       },
       
       ready() {
@@ -158,6 +184,7 @@
 
             if(data.type != undefined) {
               if(data.type == 'Pong' && data.data == self.ping_counters){
+                self.latency_sum += data.date_r;
                 self.pingHeroku();
               }
               self.addMessage("<span class=\"peerMsg\">Peer:</span> " + JSON.stringify(data));
@@ -190,6 +217,8 @@
         self.conn.on('close', function () {
             self.status = "Connection reset<br>Awaiting connection...";
             self.conn = null;
+            self.ping_counters = 0;
+            self.latency_sum = 0;
         });
       },
       go() {

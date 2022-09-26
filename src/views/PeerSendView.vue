@@ -133,24 +133,25 @@
         });
 
         self.conn.on('data', function (data) {
-          console.log('data', data)
-
+          // console.log('data', data)
           if(data.type != undefined) {
             if(data.type == 'ping' && data.data == (self.ping_counter+1)){
+              var TS = window.performance.timing.navigationStart + window.performance.now();
               self.ping_counter++;
               self.signal({
                 type: 'Pong',
-                data: self.ping_counter
+                data: self.ping_counter,
+                date_r: TS - data.date_s
               });
             }
             self.addMessage("<span class=\"peerMsg\">Peer:</span> " + JSON.stringify(data));
           } else {
             self.addMessage("<span class=\"peerMsg\">Peer:</span> " + data);
           }
-          
         });
         self.conn.on('close', function () {
           self.status = "Connection closed";
+          self.ping_counter = 0;
         });
       }, 
       getUrlParam(name) {
