@@ -306,7 +306,7 @@
       },
       Filters(CANBUSMessage) {
         console.log('CANBUSMessage', CANBUSMessage)
-        // this.emitToSocket(CANBUSMessage);
+        // this.emitToSocket(CANBUSMessage);cd
         
         // if (CANBUSMessage.indexOf('ERROR') === -1) {  
         //   this.CANCounterGUI++; //for GUI
