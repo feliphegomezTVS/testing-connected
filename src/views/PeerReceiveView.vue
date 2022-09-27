@@ -25,8 +25,12 @@
             <td><div class="message" id="message" v-html="message"></div></td>
         </tr>
         <tr>
-            <td><div class="message">PING</div></td>
-            <td><div class="message">{{ping_counters}}</div></td>
+          <td><div class="message">Battery</div></td>
+          <td><div class="message">{{batteryVoltageGUI}}</div></td>
+        </tr>
+        <tr>
+          <td><div class="message">PING</div></td>
+          <td><div class="message">{{ping_counters}}</div></td>
         </tr>
         <tr>
             <td><div class="message">SUM Timer</div></td>
@@ -54,7 +58,6 @@
 
 <script>
   import { Peer } from "peerjs";
-
     
   class LineBreakTransformer {
       constructor() {
@@ -77,7 +80,6 @@
       }
   }
 
-
   export default {
     data () {
       return {
@@ -86,6 +88,7 @@
         peer: new Peer(null, {
           debug: 2,
           pingInterval: 1,
+          bufferSize: 1024,
           // host: 'localhost',
           // path: '/myapp',
           // port: 9000,
@@ -111,37 +114,58 @@
         sendMessageInput: '',
         timeoutID: null,
 
-        port: null,
+        port: undefined,
         portConected: false,
         usbVendorId: '',
         usbProductId: '',
         isReadLoopConnected: false,
+        inputDone: '',
+        inputStream: undefined,
+        reader: ReadableStreamDefaultReader || ReadableStreamBYOBReader || undefined,
+        CANCounterGUI: 0,
+        CANMessageGUI: '',
+        CANActionGUI: '',
+        pauseIP: false,
+        recallLastFlashBlock: false,
+        pauseFlashBlockArray: false,
+        arrayLastFlashBlock: [],
+        pauseIPinstant: false,
+        skippauseIPinstant: false,
+        bufferSize: 124*1024,
+        arrayTemp: [],
+        contador: 0,
 
+        batteryVoltageGUI: '0.0',
+        voltageButton: true,
+        voltageError: true,
         
-        dinf: {
-          a: '^001([0-9A-F]){0,17}|^200([0-9A-F]){0,17}|^201([0-9A-F]){0,17}|^301([0-9A-F]){0,17}|^300([0-9A-F]){0,17}|^7([0-9A-F]){0,19}|^6([0-9A-F]){0,19}$',
-          b: '^7([0-9A-F]){0,2}80([0-9])([0-9A-F]){0,14}$',
-          c: '^7([0-9A-F]){0,3}0([0-9A-F]){0,1}04([0-9A-F]){0,12}|^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^7([0-9A-F]){0,3}023E([0-9A-F]){0,12}|^7DF([0-9A-F]){0,17}|^700([0-9A-F]){0,17}$',
-          d: '^7([0-9A-F]){0,2}81([0-9A-F]){0,3}36([0-9A-F]){0,10}|^7([0-9A-F]){0,2}80([0-9A-F]){0,1}37([0-9A-F]){0,12}$',
-          e: '^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}|^7([0-9A-F]){0,2}80([0-9A-F]){0,1}74([0-9A-F]){0,12}$',
-          f: '^001([0-9A-F]){0,17}|^7([0-9A-F]){0,3}3([0-9A-F]){0,13}|^([0-6]){0,1}([0-9A-F]){0,19}$',
-          g: '^001([0-9A-F]){0,17}|^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^700([0-9A-F]){0,17}|^7([0-9A-F]){0,3}023E80([0-9A-F]){0,10}$',
-          h: '^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^700([0-9A-F]){0,17},$',
-          i: '^7([0-9A-F]){0,3}1([0-9A-F]){0,3}36([0-9A-F]){0,10}$',
-          j: '^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}$',
-          k: '^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}$',
-          l: '^7([0-9A-F]){0,3}3([0-9A-F]){0,15}$',
-          m: '^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}|^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}$',
-          n: '^7([0-9A-F]){0,2}80([0-9A-F]){0,1}74([0-9A-F]){0,12}$',
+        IDClient: "7E9",
+        IDSupplier: "7E1",
+        CANIDfromIPMessage: null,
+        info: {
+          a: new RegExp('^001([0-9A-F]){0,17}|^200([0-9A-F]){0,17}|^201([0-9A-F]){0,17}|^301([0-9A-F]){0,17}|^300([0-9A-F]){0,17}|^7([0-9A-F]){0,19}|^6([0-9A-F]){0,19}$'),
+          b: new RegExp('^7([0-9A-F]){0,2}80([0-9])([0-9A-F]){0,14}$'),
+          c: new RegExp('^7([0-9A-F]){0,3}0([0-9A-F]){0,1}04([0-9A-F]){0,12}|^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^7([0-9A-F]){0,3}023E([0-9A-F]){0,12}|^7DF([0-9A-F]){0,17}|^700([0-9A-F]){0,17}$'),
+          d: new RegExp('^7([0-9A-F]){0,2}81([0-9A-F]){0,3}36([0-9A-F]){0,10}|^7([0-9A-F]){0,2}80([0-9A-F]){0,1}37([0-9A-F]){0,12}$'),
+          e: new RegExp('^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}|^7([0-9A-F]){0,2}80([0-9A-F]){0,1}74([0-9A-F]){0,12}$'),
+          f: new RegExp('^001([0-9A-F]){0,17}|^7([0-9A-F]){0,3}3([0-9A-F]){0,13}|^([0-6]){0,1}([0-9A-F]){0,19}$'),
+          g: new RegExp('^001([0-9A-F]){0,17}|^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^700([0-9A-F]){0,17}|^7([0-9A-F]){0,3}023E80([0-9A-F]){0,10}$'),
+          h: new RegExp('^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^700([0-9A-F]){0,17},$'),
+          i: new RegExp('^7([0-9A-F]){0,3}1([0-9A-F]){0,3}36([0-9A-F]){0,10}$'),
+          j: new RegExp('^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}$'),
+          k: new RegExp('^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}$'),
+          l: new RegExp('^7([0-9A-F]){0,3}3([0-9A-F]){0,15}$'),
+          m: new RegExp('^7([0-9A-F]){0,2}80276([0-9A-F]){0,12}|^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}$'),
+          n: new RegExp('^7([0-9A-F]){0,2}80([0-9A-F]){0,1}74([0-9A-F]){0,12}$'),
           o: 0,
           p: null,
           q: 150,
-          r: '^7([0-9A-F]){0,3}0([0-9A-F]){0,1}5003([0-9A-F]){0,10}$',
-          s: '^7([0-9A-F]){0,3}0([0-9A-F]){0,1}51([0-9A-F]){0,12}|^7([0-9A-F]){0,3}0([0-9A-F]){0,1}11([0-9A-F]){0,12}$',
-          t: '^7E([0-9A-F]){0,1}8044142([0-9A-F]){0,10}$',
-          y: '^7([0-9A-F]){0,2}83([0-9A-F]){0,15}|^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}|^7([0-9A-F]){0,3}037F0111([0-9A-F]){0,8}|^7([0-9A-F]){0,3}037F([0-9A-F]){0,2}78([0-9A-F]){0,8}|^7([0-9A-F]){0,3}0([0-9A-F]){0,1}76([0-9A-F]){0,12}$',
+          r: new RegExp('^7([0-9A-F]){0,3}0([0-9A-F]){0,1}5003([0-9A-F]){0,10}$'),
+          s: new RegExp('^7([0-9A-F]){0,3}0([0-9A-F]){0,1}51([0-9A-F]){0,12}|^7([0-9A-F]){0,3}0([0-9A-F]){0,1}11([0-9A-F]){0,12}$'),
+          t: new RegExp('^7E([0-9A-F]){0,1}8044142([0-9A-F]){0,10}$'),
+          y: new RegExp('^7([0-9A-F]){0,2}83([0-9A-F]){0,15}|^7([0-9A-F]){0,3}037F3672([0-9A-F]){0,8}|^7([0-9A-F]){0,3}037F0111([0-9A-F]){0,8}|^7([0-9A-F]){0,3}037F([0-9A-F]){0,2}78([0-9A-F]){0,8}|^7([0-9A-F]){0,3}0([0-9A-F]){0,1}76([0-9A-F]){0,12}$'),
         },
-        info: {
+        dinf: {
           a: "7DF80201429999999999",
           b: "pauseIPafterThisMessage",
           c: "pauseIPinstant",
@@ -158,18 +182,8 @@
           n: "blockCANBUSMessage",
           o: "00189900000000000083",
         },
-        inputDone: '',
-        inputStream: null,
-        reader: null,
-        CANCounterGUI: 0,
-        CANMessageGUI: '',
-        CANActionGUI: '',
-        pauseIP: false,
-        recallLastFlashBlock: false,
-        pauseFlashBlockArray: false,
-        arrayLastFlashBlock: [],
-        pauseIPinstant: false,
-        skippauseIPinstant: false,
+        preFilterRegex: /^001([0-9A-F]){0,17}|^200([0-9A-F]){0,17}|^201([0-9A-F]){0,17}|^301([0-9A-F]){0,17}|^300([0-9A-F]){0,17}|^7([0-9A-F]){0,19}|^6([0-9A-F]){0,19}$/,// TURNOED OFF
+        intervalRegex: /^001([0-9A-F]){0,17}|^7([0-9A-F]){0,2}82([0-9A-F]){0,15}|^700([0-9A-F]){0,17}|^7([0-9A-F]){0,3}023E80([0-9A-F]){0,10}$/,
       }
     },
     mounted() {
@@ -190,9 +204,12 @@
         }
       },
       async openSerialPort() {
+        let self = this;
         this.port = await navigator.serial.requestPort();
         try {
-          await this.port.open({baudRate: 57600});
+          await this.port.open({
+            baudRate: 115200
+          }, this.bufferSize);
           // this.reconnectSocket();
           this.usbVendorId = this.port.getInfo().usbVendorId;
           this.usbProductId = this.port.getInfo().usbProductId;
@@ -205,17 +222,24 @@
       async connect() {
         await this.openSerialPort();
         if (this.portConected) {
-          // await this.streamWriter();
+          await this.streamWriter();
           await this.streamReader();
           this.isReadLoopConnected = true;
           await this.readLoop(this.isReadLoopConnected);
         }
       },
       streamReader() {
-        let decoder = new TextDecoderStream();
-        this.inputDone = this.port.readable.pipeTo(decoder.writable);
-        this.inputStream = decoder.readable.pipeThrough(new TransformStream(new LineBreakTransformer()));
-        this.reader = this.inputStream.getReader();
+        try {
+            let decoder = new TextDecoderStream();
+            this.inputDone = this.port.readable.pipeTo(decoder.writable);
+            this.inputStream = decoder.readable.pipeThrough(new TransformStream(new LineBreakTransformer()));
+            this.reader = this.inputStream.getReader();
+        } catch (e) {
+          console.error(e);
+          console.log(`<ERROR: ${e.message}>`);
+        } finally {
+          console.log('streamReader::finally')
+        }
       },
       streamWriter() {
         const encoder = new TextEncoderStream();
@@ -254,24 +278,23 @@
         }
       },
       async readLoop(isConnected) {
-        while (isConnected) {
+        console.log('readLoop:start')
+        while (isConnected && this.port) {
           const {value, done} = await this.reader.read();
-          //this.Filters(value);
-          console.log('CANBUSMessage', value)
+          // this.Filters(value);
           if (done) {
             this.reader.releaseLock();
             break;
           }
+          console.log('value', value)
         }
       },
       emitToSocket(CANBUSMessage) {
-        this.arrayTemp.push(CANBUSMessage)
+        this.arrayTemp.push('emitToSocket', CANBUSMessage)
         this.contador = this.contador + this.arrayTemp.length;
-        // this.socket.emit("canMessages", this.arrayTemp)
-        if (this.channel){
-          this.channel.send(JSON.stringify(this.arrayTemp))
+        if (this.conn && this.conn.open){
+          this.conn.send(JSON.stringify(this.arrayTemp))
         }
-
         this.arrayTemp = [];
       },
       UIIPRendering(IPMessage) {
@@ -282,31 +305,69 @@
         }
       },
       Filters(CANBUSMessage) {
+        console.log('CANBUSMessage', CANBUSMessage)
+        // this.emitToSocket(CANBUSMessage);
+        
+        // if (CANBUSMessage.indexOf('ERROR') === -1) {  
+        //   this.CANCounterGUI++; //for GUI
+
+        //   if (CANBUSMessage.slice(4, 5) !== "2") this.CANMessageGUI = CANBUSMessage;
+          
+        //   if (this.preFilterRegex.test(CANBUSMessage)) {
+        //     this.pauseIP = false;
+        //     this.CANActionGUI = "unpauseIP";
+        //     if (this.CANIDfromIPMessage !== "001") {
+        //       this.voltageTest();
+        //     }
+        //     // if (!this.intervalRegex.test(CANBUSMessage)) {
+        //     //   this.resetAllTimers();
+        //     // }
+        //     // if (this.intervalRegex.test(CANBUSMessage) && this.autoReplyRepeater2conditions === true) {
+        //     //   this.resetIntervalautoReplyRepeater2();
+        //     // }
+        //     // if (this.intervalRegex.test(CANBUSMessage) && this.autoReplyFlashBlockConditions === true) {
+        //     //   this.resetFlashBlockReplyInterval();
+        //     // }
+        //     // if (CANBUSMessage === "00189900000000000070") {
+        //     //   this.resetAllArraysAndObjects();
+        //     // }
+        //     this.checkAutoReplyActions(CANBUSMessage);
+        //     this.blockCANBUSMessage(CANBUSMessage);
+        //   }
+        // }
+
+        return;
         if (CANBUSMessage.indexOf('ERROR') === -1) {
           this.CANCounterGUI++;
           if (CANBUSMessage.slice(4, 5) !== "2") {
+            // console.log('CANBUSMessage::a!==2', CANBUSMessage)
             this.CANMessageGUI = CANBUSMessage;
           }
           if (this.info.a.test(CANBUSMessage)) {
+            // console.log('CANBUSMessage::a::k', CANBUSMessage)
+            // console.log('CANBUSMessage::a::Testing', new RegExp('^7E([0-9A-F]){0,1}8044142([0-9A-F]){0,10}$').test(CANBUSMessage))
+
             this.pauseIP = false;
             this.CANActionGUI = this.dinf.k;
-
             if (this.info.k.test(CANBUSMessage)) {
+              console.log('CANBUSMessage::a::k', CANBUSMessage)
               this.recallLastFlashBlock = false;
               this.pauseFlashBlockArray = true;
               this.arrayLastFlashBlock = [];
-
             }
             if (this.info.e.test(CANBUSMessage) && (this.pauseFlashBlockArray === true)) {
+              console.log('CANBUSMessage::a::e', CANBUSMessage)
               this.pauseIPinstant = false;
               this.pauseIP = true;
               this.skippauseIPinstant = true;
               this.CANActionGUI = this.dinf.l
             }
             if (this.info.t.test(CANBUSMessage)) {
-              // this.changeVoltageGUI(CANBUSMessage);
+              console.log('CANBUSMessage::a::t', CANBUSMessage)
+              this.changeVoltageGUI(CANBUSMessage);
             }
             if (this.info.j.test(CANBUSMessage)) {
+              console.log('CANBUSMessage::a::j', CANBUSMessage)
               this.recallLastFlashBlock = true;
               this.CANActionGUI = this.dinf.m
               this.pauseFlashBlockArray = false;
@@ -315,6 +376,7 @@
               this.pauseFlashBlockArray = false;
             }
             if ((this.info.m.test(CANBUSMessage) === true)) {
+              console.log('CANBUSMessage::a::m', CANBUSMessage)
               if (this.info.o !== 255) {
                 this.info.o = this.info.o + 1;
               } else {
@@ -323,16 +385,159 @@
               this.convertFlashBlockCounter()
             }
             if ((this.info.n.test(CANBUSMessage) === true)) {
+              console.log('CANBUSMessage::a::n', CANBUSMessage)
               this.info.o = 1;
               this.convertFlashBlockCounter()
             }
             if ((this.info.y.test(CANBUSMessage))) {
+              console.log('CANBUSMessage::a::y', CANBUSMessage)
               this.CANActionGUI = this.dinf.n;
             } else {
+              // console.log('CANBUSMessage::a::else', CANBUSMessage)
               this.emitToSocket(CANBUSMessage);
             }
           }
+          
         }
+      },
+      voltageTest() {
+        if (this.voltageButton) {
+          let intervalTimeVoltageCheck = 6000;
+          clearInterval(this.writeReplyRepeateadly6);//voltagetest intervalreset
+          this.writeReplyRepeateadly6 = setInterval(() => {
+            this.voltageNoResponse = true;
+            setTimeout(() => {
+              if (this.voltageNoResponse === true) {//if no answer from ecu: autoreset to 0 after 500msec, interupt timer with every can/Ip msg. only perform voltage test on silence
+                this.batteryVoltageGUI = '0.0';
+                this.checkVoltageTooLow(this.batteryVoltageGUI)
+              }
+            }, 500);
+            this.emitToSocket("7DF80201429999999999");
+            setTimeout(() => {
+              if (this.voltageNoResponse === true) {
+                this.batteryVoltageGUI = '0.0';
+                this.checkVoltageTooLow(this.batteryVoltageGUI)
+              }
+            }, 700);
+          }, intervalTimeVoltageCheck)
+        }
+      },
+      resetAllTimers() {
+        clearInterval(this.writeReplyRepeateadly);
+        clearInterval(this.writeReplyRepeateadly2);
+        this.autoReplyRepeater2conditions = false;
+        clearTimeout(this.setRepeaterTimeout);
+        clearTimeout(this.setRepeaterTimeout2);
+      },
+      resetIntervalautoReplyRepeater2() {
+        clearInterval(this.writeReplyRepeateadly2);
+        this.writeReplyRepeateadly2 = setInterval(() => {
+          this.writeToStream(this.reply2)
+        }, this.interval2);
+      },
+      resetFlashBlockReplyInterval() {
+        clearTimeout(this.writeReplyRepeateadly5);
+        if (this.autoReplyFlashBlockConditions === true) {
+          this.writeReplyRepeateadly5 = setTimeout(() => {
+            clearInterval(this.writeReplyRepeateadly2)
+            this.writeToStream(this.replyFlashblock);
+            this.autoReplyFlashBlockConditions = false;
+          }, this.interval3);
+        }
+      },
+      resetAllArraysAndObjects(emit = true) {
+        if (emit) {
+          this.socket.emit('any', {event: 'resetAllArraysAndObjects', args: [false]})
+        }
+        this.$refs.resetAll.classList.add('active');
+        setTimeout(() => this.$refs.resetAll.classList.remove('active'), 1500);
+
+        setTimeout(() => {
+          this.CANActionGUI = "full Reset";
+          // this.lastMaxPing = 0;
+          // this.lastMaxPerPing = 0;
+          this.pauseIP = false;
+          this.pauseIPinstant = false;
+          this.skippauseIPinstant = false;
+          this.arrayTemp = [];
+          this.arrayCANBUSMessage = [];
+          this.arrayData = [];
+          this.TempArraySize = 0;
+          this.arrayTempWrite = [];
+          this.flashSession = false;
+          this.arrayLastFlashBlock = [];
+          this.CANCounterGUI = 0;
+          this.IPCounterGUI = 0;
+          this.clientDonglePresent = false;
+          this.replyID = null;
+          this.flashBlockCountertoHEX = 0;
+          this.flashBlockCounter = 0;
+        }, 1250);
+        clearInterval(this.writeReplyRepeateadly);
+        clearInterval(this.writeReplyRepeateadly2);
+        clearTimeout(this.writeReplyRepeateadly3);
+        clearInterval(this.writeReplyRepeateadly4);
+        clearTimeout(this.writeReplyRepeateadly5);
+      },
+      async checkAutoReplyActions(CANBUSMessage) {
+        if (((CANBUSMessage.slice(0, 3) !== this.lastIDFromCAN) && (CANBUSMessage.slice(0, 3) !== "700")) || this.replyID === null) {
+          if ((this.exceptionListReplyIDRegex.test(CANBUSMessage) === false)) {
+            this.lastIDFromCAN = CANBUSMessage.slice(0, 3);
+            this.CANIDS.forEach((item) => {
+                if ((item.id === ('CANID' + this.lastIDFromCAN).toString()) && item.status === true) {
+                  this.replyID = item.response;
+                }
+              }
+            );
+          }
+        }
+
+        this.autoReplyWithFixedID(CANBUSMessage);
+        if (this.replyID !== null) {
+          this.autoReplyWithReplyCANIDFromList(CANBUSMessage);
+          this.autoReplyRepeater(CANBUSMessage);
+          this.autoReplyRepeater2(CANBUSMessage);
+          this.autoReplyFlashblock(CANBUSMessage);
+          this.keepAlive(CANBUSMessage);
+          this.multiReply(CANBUSMessage);
+
+        }
+      },
+      async blockCANBUSMessage(line) {
+        this.letMessagePass = true;
+        glc250Filters.can.map(filter => {
+          Object.keys(filter).forEach((expression) => {
+            let carRegularExpression = RegExp(filter[expression].regex);
+            let carRegularExpressionException = RegExp(filter[expression].except);
+            if (filter[expression].action === "blockCANBUSMessage" && (carRegularExpression.test(line)) && (!carRegularExpressionException.test(line))) {
+              this.letMessagePass = false;
+              this.CANActionGUI = "blockCANBUSMessage";
+            } else {
+              return false;
+            }
+          })
+        })
+        if (this.letMessagePass === true) {
+          this.emitToSocket(line);
+        }
+      },
+      changeVoltageGUI(CANBUSMessage) {
+        // console.log('changeVoltageGUI', CANBUSMessage)
+        if (this.voltageButton) {
+          this.voltageNoResponse = false;
+          let batteryVoltageGUIHEX1 = CANBUSMessage.slice(10, 12);
+          let batteryVoltageGUIHEX2 = CANBUSMessage.slice(12, 14);
+          let A = parseInt(batteryVoltageGUIHEX1, 16);
+          let B = parseInt(batteryVoltageGUIHEX2, 16);
+          // console.log('batteryVoltageGUIHEX1', batteryVoltageGUIHEX1, 'A', A, A*256)
+          // console.log('batteryVoltageGUIHEX2', batteryVoltageGUIHEX2, 'B', B)
+          let batteryVoltageGUIraw = (((256 * A) + B) / 1000);
+          this.batteryVoltageGUI = batteryVoltageGUIraw.toFixed(1);
+          this.checkVoltageTooLow(this.batteryVoltageGUI);
+        }
+      },
+      checkVoltageTooLow(value) {
+        this.voltageError = (Number(value) < 11);
       },
       convertFlashBlockCounter() {
         this.info.p = this.info.o.toString(16);
@@ -346,88 +551,6 @@
       },
 
 
-
-      async connectSerialport() {
-        let self = this;
-        if ("serial" in navigator) {
-          // const ports = await navigator.serial.getPorts();
-          // console.log('ports', ports)
-          const port = await navigator.serial.requestPort();
-          console.log('port', port)
-          await port.open({ baudRate: 57600 });
-          const { usbProductId, usbVendorId } = port.getInfo();
-          // console.log('usbProductId', usbProductId, 'usbVendorId', usbVendorId)
-
-          // const signals = await port.getSignals();
-          // console.log(`Clear To Send:       ${signals.clearToSend}`);
-          // console.log(`Data Carrier Detect: ${signals.dataCarrierDetect}`);
-          // console.log(`Data Set Ready:      ${signals.dataSetReady}`);
-          // console.log(`Ring Indicator:      ${signals.ringIndicator}`);
-          
-          // const textDecoder = new TextDecoderStream();
-          // const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-          // const reader = textDecoder.readable.getReader();
-
-          // // Listen to data coming from the serial device.
-          // while (true) {
-          //   const { value, done } = await reader.read();
-          //   if (done) {
-          //     reader.releaseLock();
-          //     break;
-          //   }
-          //   // value is a string.
-          //   console.log(value);
-          // }
-
-          // const textEncoder = new TextEncoderStream();
-          // const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);}
-          // console.log(textEncoder)
-            /*
-          var reader;
-          while (port.readable) {
-            try {
-              reader = port.readable.getReader({ mode: "byob" });
-            }
-            catch {
-              reader = port.readable.getReader();
-            }
-            let buffer = null;
-            for (;;) {
-              const {value, done} = await (async () => {
-                if (reader instanceof ReadableStreamBYOBReader) {
-                  if (!buffer) {
-                    buffer = new ArrayBuffer(bufferSize);
-                  }
-                  const {value, done} =
-                      await reader.read(new Uint8Array(buffer, 0, bufferSize));
-                  buffer = value?.buffer;
-                  return {value, done};
-                } else {
-                  return await reader.read();
-                }
-              })();
-
-              if (value) {
-                self.conn.send(value)
-              }
-              if (done) {
-                break;
-              }
-            }
-          } catch (e) {
-            console.error(e);
-            console.log(`<ERROR: ${e.message}>`)
-          } finally {
-            if (reader) {
-              reader.releaseLock();
-              reader = undefined;
-            }
-          }
-          */
-        } else {
-          console.log("Serial port no soportado");
-        }
-      },
       initialize(){
         let self = this;
         
@@ -485,6 +608,14 @@
           this.sendMessageInput = "";
           this.conn.send(msg);
           console.log("Sent: " + msg)
+          this.addMessage("<span class=\"selfMsg\">Self: </span>" + msg);
+        } else {
+          console.log('Connection is closed');
+        }
+      },
+      peerEmitMessage(msg){
+        if (this.conn && this.conn.open) {
+          this.conn.send(msg);
           this.addMessage("<span class=\"selfMsg\">Self: </span>" + msg);
         } else {
           console.log('Connection is closed');

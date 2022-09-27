@@ -50,6 +50,7 @@
         peer: new Peer(null, {
           debug: 2,
           pingInterval: 1,
+          bufferSize: 1024,
           // host: 'localhost',
           // path: '/myapp',
           // port: 9000,
